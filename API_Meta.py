@@ -23,7 +23,7 @@ Error_get_id_account = APIError('Error al obtener el ID de la cuenta de publicid
 
 class API_meta:
     def __init__(self,dict_env):
-        self.dict_env = dict_env
+        self.key_token:str = key_token
         self.iniFbAPI()
 
     # geters  
@@ -60,14 +60,13 @@ class API_meta:
         """
         try:
             # Validar formato del diccionario de acceso a la variable de entorno
-            if type(self.dict_env['ruta']) != str or type(self.dict_env['nombre_token']) != str:
-                raise Error_dict_format
-            if len(self.dict_env['ruta']) == 0 or len(self.dict_env['nombre_token']) == 0:
+            if type(self.key_token) != str:
                 raise Error_dict_format
             # Cargar variable de entorno
-            load_dotenv(dotenv_path=self.dict_env['ruta'])
+            load_dotenv()
+            # load_dotenv(dotenv_path=self.dict_env['ruta'])
             # Obtener el token
-            self.token = os.getenv(self.dict_env['nombre_token'])
+            self.token = os.getenv(self.key_token)
             # Validar que el token no sea nulo
             if self.token is None:
                 raise Error_get_token
@@ -122,6 +121,21 @@ class API_meta:
         except Exception as e:
             print(e)
 
+    def getAds(self,campaign_id:str,mostrar:bool=False) -> list:
+        """
+        Esta función obtiene los anuncios de una campaña
+        """
+        try:
+            # Obtener anuncios de una campaña
+            campaign = Campaign(fbid=campaign_id)
+            self.ads = list(campaign.get_ads(
+                fields=["id", "name", "status", "effective_status"])
+            )
+            if mostrar: self.printAds()
+            return self.ads
+        except Exception as e:
+            print(e)
+
     # metodos auxiliares
     def printAccounts(self) -> None:
         """
@@ -146,7 +160,19 @@ class API_meta:
             print(f"> [{contador}] Campaign ID: {campaign['id']}, Name: {campaign['name']}, Status: {campaign['status']}, Effective Status: {campaign['effective_status']}, Objective: {campaign['objective']}")
             contador += 1
         print('\n')
-        print("@ Utiliza el [id] de una de las campañas de arriba dentro de la función getAdCampaigns() para obtener los datos de la campaña")
+        print("@ Utiliza el [id] de una de las campañas de arriba dentro de la función getAds() para obtener los datos de la campaña")
+        print("-" * 40)
+
+    def printAds(self) -> None:
+        """
+        Esta función imprime las campañas de una cuenta de publicidad
+        """
+        print(f'# Anuncios obtenidos')
+        contador = 0
+        for ad in self.ads:
+            print(f"> [{contador}] Ad ID: {ad['id']}, Name: {ad['name']}, Status: {ad['status']}, Effective Status: {ad['effective_status']}")
+            contador += 1
+        print('\n')
         print("-" * 40)
 
     def getFechaAyer(self) -> str:
@@ -158,10 +184,21 @@ class API_meta:
     
 
 # Test
-dict_env = {'ruta':'./config.env','nombre_token':'ACCESS_TOKEN_META'}
-meta = API_meta(dict_env)
+
+key_token = 'ACCESS_TOKEN_META'
+meta = API_meta(key_token)
 meta.getAdAccounts(True)
 id_cta_pub = meta.getIdAccount(1)
-meta.getAdCampaigns(id_cta_pub,True)
+campaña = meta.getAdCampaigns(id_cta_pub,True)
+meta.getAds(campaña[0]['id'],True)
 
 
+
+# FacebookAdsApi.init(access_token=dict_env['ACCESS_TOKEN_META']) 
+
+# me = User(fbid="me")
+# user_fields = ["account_id", "id", "name"]
+# my_accounts = list(me.get_ad_accounts(fields=user_fields))
+
+# for account in my_accounts:
+#     print(f"Account ID: {account['account_id']}, Name: {account['name']}")
