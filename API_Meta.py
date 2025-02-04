@@ -2,6 +2,7 @@ from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.campaign import Campaign
 from facebook_business.adobjects.user import User
 from facebook_business.adobjects.adaccount import AdAccount
+from facebook_business.adobjects.ad import Ad
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
@@ -136,6 +137,43 @@ class API_meta:
         except Exception as e:
             print(e)
 
+    def getAdEstats(self,
+                    ad:Ad,
+                    fields:list=[
+                        "reach",                          
+                        "impressions",                 
+                        "inline_link_clicks",      
+                        "cpc",                        
+                        "actions",
+                        "spend"
+                    ],
+                    params:dict={
+                        "level": "ad",
+                        "breakdowns": ["age", "gender"]
+        }) -> dict:
+        """
+        Esta función obtiene las estadísticas de un anuncio
+        """
+            # Definir los campos de métricas
+        fields=[
+                "reach",                          
+                "impressions",                 
+                "inline_link_clicks",      
+                "cpc",                        
+                "actions",
+                "spend"
+        ]
+        # Definir parámetros adicionales
+        params = {
+            "time_range": {"since": '2025-01-27', "until": '2025-01-27'},  # Ajusta el rango de fechas
+            "level": "ad",  # Nivel de granularidad: 'campaign', 'adset', 'ad'
+            "breakdowns": ["age", "gender"]  # Desglose por edad y género
+        }
+        resultado = ad.get_insights(fields=fields, params=params)
+        return resultado
+
+
+
     # metodos auxiliares
     def printAccounts(self) -> None:
         """
@@ -190,7 +228,9 @@ meta = API_meta(key_token)
 meta.getAdAccounts(True)
 id_cta_pub = meta.getIdAccount(1)
 campaña = meta.getAdCampaigns(id_cta_pub,True)
-meta.getAds(campaña[0]['id'],True)
+ads = meta.getAds(campaña[0]['id'],True)
+resultados = meta.getAdEstats(ads[0])
+print(resultados)
 
 
 
