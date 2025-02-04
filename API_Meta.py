@@ -4,8 +4,9 @@ from facebook_business.adobjects.user import User
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.ad import Ad
 from datetime import datetime, timedelta
-import os
 from dotenv import load_dotenv
+import pandas as pd
+import os
 
 class APIError(Exception):
     """Clase base para errores personalizados."""
@@ -21,6 +22,7 @@ Error_get_token = APIError('Error al obtener el token. Por favor revisa la confi
 Error_ini_API = APIError('Error al inicializar la API de Facebook. Por favor revisa que el token sea válido para comenzar','Error')
 Error_get_accounts = APIError('Error al obtener las cuentas de publicidad. Por favor revisa que el token sea válido para consultar los datos','Error')
 Error_get_id_account = APIError('Error al obtener el ID de la cuenta de publicidad. Por favor revisa que el índice ingresado sea válido','Error Index')
+Error_dict_vacio = APIError('Error al mapear las estadísticas de un anuncio. Por favor revisa que el diccionario no esté vacío','Error')
 
 class API_meta:
     def __init__(self,dict_env):
@@ -150,7 +152,7 @@ class API_meta:
                     params:dict={
                         "level": "ad",
                         "breakdowns": ["age", "gender"]
-        }) -> dict:
+        }) -> pd.DataFrame:
         """
         Esta función obtiene las estadísticas de un anuncio
         """
@@ -169,8 +171,9 @@ class API_meta:
             "level": "ad",  # Nivel de granularidad: 'campaign', 'adset', 'ad'
             "breakdowns": ["age", "gender"]  # Desglose por edad y género
         }
-        resultado = ad.get_insights(fields=fields, params=params)
-        return resultado
+        respuesta = ad.get_insights(fields=fields, params=params)
+        data = self.estatToDataframe(respuesta)
+        return data
 
 
 
@@ -220,6 +223,68 @@ class API_meta:
         ayer = datetime.now() - timedelta(days=1)
         return ayer.strftime('%Y-%m-%d')
     
+    def mapEstatElement(self,estat:dict) -> list:
+        """
+        Esta función mapea las estadísticas de un anuncio
+        Solo recibe un elemento del resultado completo
+        """
+        estats = dict(estat)
+        # print(dict(estats))
+        try:
+            estat_keys = list(estats.keys())
+            # print(met_keys)
+            if len(estat_keys) == 0: raise Error_dict_vacio
+            # return pd.DataFrame(dict(estat))
+            met_dict = {}
+            not_str = {}
+            for met in estats:
+                if type(estats[met]) == str:
+                    met_dict[met] = estats[met]
+                else:
+                    not_str[met] = estats[met]
+                    data = not_str[met]
+                    for metric in data:
+                        key = metric[list(metric.keys())[0]]
+                        value = metric[list(metric.keys())[1]]
+                        met_dict[key] = value
+            return met_dict
+        except Exception as e:
+            print(e)
+
+    def mapEstat(self,estats:list) -> list:
+        """
+        Esta función mapea las estadísticas de un anuncio
+        Recibe el resultado completo
+        """
+        try:
+            # Validar que el diccionario no esté vacío
+            if len(estats) == 0: raise Error_dict_vacio
+            # Mapear estadísticas de anuncios
+            data = []
+            for estat in estats:
+                data.append(self.mapEstatElement(estat))
+            return data
+        except Exception as e:
+            print(e)
+
+    def estatToDataframe(self,estats:list) -> pd.DataFrame:
+        """
+        Esta función convierte las estadísticas de un anuncio en un DataFrame
+        """
+        try:
+            # Validar que el diccionario no esté vacío
+            if len(estats) == 0: raise Error_dict_vacio
+            data = self.mapEstat(estats)
+            # Convertir estadísticas a DataFrame
+            met_keys = list(data[0].keys())
+            datos_ini = {variable: [] for variable in met_keys}
+            df = pd.DataFrame(datos_ini)
+            for row in data:
+                df.loc[len(df)] = row
+            return df
+        except Exception as e:
+            print(e)
+
 
 # Test
 
@@ -229,9 +294,9 @@ meta.getAdAccounts(True)
 id_cta_pub = meta.getIdAccount(1)
 campaña = meta.getAdCampaigns(id_cta_pub,True)
 ads = meta.getAds(campaña[0]['id'],True)
-resultados = meta.getAdEstats(ads[0])
-print(resultados)
+df = meta.getAdEstats(ads[0])
 
+df.to_csv('data_test.csv',index=False)
 
 
 # FacebookAdsApi.init(access_token=dict_env['ACCESS_TOKEN_META']) 
