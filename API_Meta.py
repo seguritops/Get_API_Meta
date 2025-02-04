@@ -156,21 +156,6 @@ class API_meta:
         """
         Esta función obtiene las estadísticas de un anuncio
         """
-            # Definir los campos de métricas
-        fields=[
-                "reach",                          
-                "impressions",                 
-                "inline_link_clicks",      
-                "cpc",                        
-                "actions",
-                "spend"
-        ]
-        # Definir parámetros adicionales
-        params = {
-            "time_range": {"since": '2025-01-27', "until": '2025-01-27'},  # Ajusta el rango de fechas
-            "level": "ad",  # Nivel de granularidad: 'campaign', 'adset', 'ad'
-            "breakdowns": ["age", "gender"]  # Desglose por edad y género
-        }
         respuesta = ad.get_insights(fields=fields, params=params)
         data = self.estatToDataframe(respuesta)
         return data
@@ -294,9 +279,15 @@ meta.getAdAccounts(True)
 id_cta_pub = meta.getIdAccount(1)
 campaña = meta.getAdCampaigns(id_cta_pub,True)
 ads = meta.getAds(campaña[0]['id'],True)
-df = meta.getAdEstats(ads[0])
+metricas = ['reach','spend']
+parametros = {
+    'level': 'ad',
+    "breakdowns": ["age"]
+}
+df = meta.getAdEstats(ads[0],metricas,parametros)
+print(df)
 
-df.to_csv('data_test.csv',index=False)
+# df.to_csv('data_test.csv',index=False)
 
 
 # FacebookAdsApi.init(access_token=dict_env['ACCESS_TOKEN_META']) 
