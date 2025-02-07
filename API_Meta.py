@@ -5,6 +5,7 @@ from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.ad import Ad
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from datetime import date
 import pandas as pd
 import requests
 import time
@@ -25,13 +26,15 @@ Error_ini_API = APIError('Error al inicializar la API de Facebook. Por favor rev
 Error_get_accounts = APIError('Error al obtener las cuentas de publicidad. Por favor revisa que el token sea válido para consultar los datos','Error')
 Error_get_id_account = APIError('Error al obtener el ID de la cuenta de publicidad. Por favor revisa que el índice ingresado sea válido','Error Index')
 Error_dict_vacio = APIError('Error al mapear las estadísticas de un anuncio. Por favor revisa que el diccionario no esté vacío','Error')
+Error_API_request = APIError('Error al realizar la petición a la API de Meta. Por favor revisa que los parametros y metricas sean validos','Error consulta')
 
 DEBUG_TOKEN_URL = f"https://graph.facebook.com/v22.0/debug_token"
 EXCHANGE_TOKEN_URL = f"https://graph.facebook.com/v22.0/oauth/access_token"
 
 class API_meta:
-    def __init__(self,dict_env):
-        self.key_token:str = key_token
+    def __init__(self):
+        # self.hoy = date.today()
+        self.hoy = '2025-01-27'
         self.iniFbAPI()
 
     # geters  
@@ -82,26 +85,38 @@ class API_meta:
         Esta función ejecuta la API de Meta
         """
         try:
+            ######################
+            # VALIODACION TOKEN
+            ######################
             if not self.validarToken(): # Validar token
                 print('pedi nuevo token')
                 self.token = self.getNuevoToken() # Obtener nuevo token
                 self.actEnvVariable(self.key_token,self.token) # Actualizar token en variable de entorno
                 self.depurar_token(self.token) # Depurar token
-
-            # Obtener cuentas de publicidad
+            ######################
+            # OBTENER CUENTAS
+            ######################
             print('🔄 Buscando cuentas...')
             print('\n')
             self.getAdAccounts(True)
-            # Obtener campañas de una cuenta de publicidad
             id_cta = self.getIdAccount(1)
+            ######################
+            # OBTENER ANUNCIOS
+            ######################
             print(f'🔄 Buscando campañas para la cuenta {self.getNombreCuenta(id_cta)}...')
             print('\n')
             self.getAdCampaigns(id_cta,True)
             id_campaign = self.campaigns[0]['id']
             # Obtener anuncios de una campaña
             self.getAds(id_campaign,True)
+            ##########################
+            # OBTENER ESTADISTICAS
+            ##########################
+            ad_i = self.ads[0]
+            print(self.getAdEstats(ad_i))
         except Exception as e:
             print(e)
+
     
     # TOKEN
     def getToken(self,show=False) -> str:
@@ -109,14 +124,10 @@ class API_meta:
         Esta función obtiene el token de Meta desde la variable de entorno
         """
         try:
+            self.token = self.getAppPass()[0]
             # Validar formato del diccionario de acceso a la variable de entorno
-            if type(self.key_token) != str:
+            if type(self.token) != str:
                 raise Error_dict_format
-            # Cargar variable de entorno
-            load_dotenv()
-            # load_dotenv(dotenv_path=self.dict_env['ruta'])
-            # Obtener el token
-            self.token = os.getenv(self.key_token)
             # Validar que el token no sea nulo
             if self.token is None:
                 raise Error_get_token
@@ -127,7 +138,7 @@ class API_meta:
 
     def validarToken(self) -> None:
         """Verifica si el token de acceso es válido."""
-        APP_ID,APP_SECRET = self.getAPPData()
+        ACCESS_TOKEN_META,APP_ID,APP_SECRET = self.getAppPass()
         params = {
             "input_token": self.token,
             "access_token": f"{APP_ID}|{APP_SECRET}"
@@ -148,8 +159,7 @@ class API_meta:
     
     def getNuevoToken(self) -> str:
         """Obtiene un nuevo token de acceso intercambiando el token actual."""
-        APP_ID,APP_SECRET = self.getAPPData()
-        ACCESS_TOKEN = self.getToken()
+        ACCESS_TOKEN,APP_ID,APP_SECRET = self.getAppPass()
         params = {
             "grant_type": "fb_exchange_token",
             "client_id": APP_ID,
@@ -256,14 +266,20 @@ class API_meta:
                     ],
                     params:dict={
                         "level": "ad",
-                        "breakdowns": ["age", "gender"]
+                        # "breakdowns": ["gender",'age']
+                        "breakdowns": ["country"]
+                        # "breakdowns": ["publisher_platform",'platform_position']
         }) -> pd.DataFrame:
         """
         Esta función obtiene las estadísticas de un anuncio
         """
-        respuesta = ad.get_insights(fields=fields, params=params)
-        data = self.estatToDataframe(respuesta)
-        return data
+        params["time_range"] = {"since": str(self.hoy), "until": str(self.hoy)} # Traer datos ayer
+        try:
+            respuesta = ad.get_insights(fields=fields, params=params)
+            data = self.estatToDataframe(respuesta)
+            return data
+        except Exception as e:      
+            print(e)
 
 
 
@@ -375,15 +391,16 @@ class API_meta:
         except Exception as e:
             print(e)
 
-    def getAPPData(self) -> list:
+    def getAppPass(self) -> list:
         """
         Esta función obtiene los datos de la aplicación
         """
         try:
             load_dotenv()
+            ACCESS_TOKEN_META = os.getenv('ACCESS_TOKEN_META')
             APP_ID = os.getenv('APP_ID')
             APP_SECRET = os.getenv('APP_SECRET')
-            return [APP_ID,APP_SECRET]
+            return [ACCESS_TOKEN_META,APP_ID,APP_SECRET]
         except Exception as e:
             print(e)
 
@@ -425,8 +442,7 @@ class API_meta:
 # print(APP_ID)
 # print(APP_SECRET)
 
-key_token = 'ACCESS_TOKEN_META'
-meta = API_meta(key_token)
+meta = API_meta()
 meta.runAPI()
 # meta.getAdAccounts(True)
 # id_cta_pub = meta.getIdAccount(1)
