@@ -34,7 +34,7 @@ EXCHANGE_TOKEN_URL = f"https://graph.facebook.com/v22.0/oauth/access_token"
 class API_meta:
     def __init__(self):
         # self.hoy = date.today()
-        self.hoy = '2025-01-27'
+        self.hoy = '2025-02-25'
         self.iniFbAPI()
 
     # geters  
@@ -99,20 +99,26 @@ class API_meta:
             print('🔄 Buscando cuentas...')
             print('\n')
             self.getAdAccounts(True)
-            id_cta = self.getIdAccount(1)
+            id_cta = self.getIdAccount(12)
             ######################
             # OBTENER ANUNCIOS
             ######################
             print(f'🔄 Buscando campañas para la cuenta {self.getNombreCuenta(id_cta)}...')
             print('\n')
-            self.getAdCampaigns(id_cta,True)
-            id_campaign = self.campaigns[0]['id']
+            self.getAdCampaigns(id_cta,False)
+            # print(self.campaigns[:2])
+            objectives = list(set(campaign["objective"] for campaign in self.campaigns))
+            print(objectives)
+            latest_campaign = max(self.campaigns, key=lambda c: datetime.strptime(c["start_time"][:-5], "%Y-%m-%dT%H:%M:%S"))
+            print(latest_campaign)
+            # id_campaign = self.campaigns[0]['id']
             # Obtener anuncios de una campaña
-            self.getAds(id_campaign,True)
+            # self.getAds(id_campaign,True)
+            self.getAds(latest_campaign['id'],True)
             ##########################
             # OBTENER ESTADISTICAS
             ##########################
-            ad_i = self.ads[0]
+            ad_i = self.ads[8]
             print(self.getAdEstats(ad_i))
         except Exception as e:
             print(e)
@@ -190,6 +196,7 @@ class API_meta:
             print("❌ Error al depurar el token:", data)
             return None
 
+    # ACCESO RECURSOS API
     def iniFbAPI(self) -> None:
         """
         Esta función inicializa la API de Facebook con el token de acceso
@@ -229,7 +236,7 @@ class API_meta:
             # Obtener campañas de una cuenta de publicidad
             ad_account = AdAccount(f"act_{account_id}")
             self.campaigns = list(ad_account.get_campaigns(
-                fields=["id", "name", "status", "effective_status", "objective"])
+                fields=["id", "name", "status", "effective_status", "objective", "start_time", "stop_time"])
             )
             print('✅ Campañas obtenidas con éxito')
             if mostrar_campaigns: self.printCampaigns()
@@ -267,8 +274,8 @@ class API_meta:
                     params:dict={
                         "level": "ad",
                         # "breakdowns": ["gender",'age']
-                        "breakdowns": ["country"]
-                        # "breakdowns": ["publisher_platform",'platform_position']
+                        # "breakdowns": ["country"]
+                        "breakdowns": ["publisher_platform",'platform_position']
         }) -> pd.DataFrame:
         """
         Esta función obtiene las estadísticas de un anuncio
@@ -281,7 +288,8 @@ class API_meta:
         except Exception as e:      
             print(e)
 
-
+    def getGroupedAdEstats(self):
+        pass
 
     # metodos auxiliares
     def printAccounts(self,show_i:bool=False) -> None:
