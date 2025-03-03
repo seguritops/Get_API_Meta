@@ -10,32 +10,21 @@ import pandas as pd
 import requests
 import time
 import os
+# Error Handler
+from Error import *
+# URLs
+from URLs import DEBUG_TOKEN_URL,EXCHANGE_TOKEN_URL
 
-class APIError(Exception):
-    """Clase base para errores personalizados."""
-
-    def __init__(self, message: str, tipo: str):
-        self.message = message
-        # self.code = code  # Código de error opcional
-        super().__init__(f"[{tipo}] {message}")
-
-# Crear errores personalizados
-Error_dict_format = APIError('Debes ingresar un diccionario con las llaves "ruta" y "nombre_token" en formato texto no nulo','Error Formato')
-Error_get_token = APIError('Error al obtener el token. Por favor revisa la configuración de la variable de entorno o diccionario de acceso a ella','Error')
-Error_ini_API = APIError('Error al inicializar la API de Facebook. Por favor revisa que el token sea válido para comenzar','Error')
-Error_get_accounts = APIError('Error al obtener las cuentas de publicidad. Por favor revisa que el token sea válido para consultar los datos','Error')
-Error_get_id_account = APIError('Error al obtener el ID de la cuenta de publicidad. Por favor revisa que el índice ingresado sea válido','Error Index')
-Error_dict_vacio = APIError('Error al mapear las estadísticas de un anuncio. Por favor revisa que el diccionario no esté vacío','Error')
-Error_API_request = APIError('Error al realizar la petición a la API de Meta. Por favor revisa que los parametros y metricas sean validos','Error consulta')
-
-DEBUG_TOKEN_URL = f"https://graph.facebook.com/v22.0/debug_token"
-EXCHANGE_TOKEN_URL = f"https://graph.facebook.com/v22.0/oauth/access_token"
-
+####################################################
+## API META
+####################################################
 class API_meta:
-    def __init__(self):
-        # self.hoy = date.today()
-        self.hoy = '2025-02-25'
-        self.iniFbAPI()
+    def __init__(self,config_estats_publicidad:dict,fecha_captura:datetime | date | str = date.today()):
+        self.hoy = fecha_captura
+        self.ruta_config_estats_publicidad = config_estats_publicidad['ruta']
+        self.hoja_config_estats_publicidad = config_estats_publicidad['hoja']
+        self.campaigns = {}
+        self.iniMetaAPI()
 
     # geters  
     def getIdAccount(self,indice:int) -> str:
@@ -50,13 +39,13 @@ class API_meta:
         except Exception as e:
             print(e)
 
-    def getNombreCampaign(self,campaign_id:str) -> str:
+    def getNombreCampaign(self,acct_id:str,campaign_id:str) -> str:
         """
         Esta función obtiene el nombre de una cuenta de publicidad
         """
         try:
             # Obtener nombre de la cuenta de publicidad
-            for campaign in self.campaigns:
+            for campaign in self.campaigns[acct_id]:
                 campaign = dict(campaign)
                 if campaign['id'] == campaign_id:
                     return campaign['name']
@@ -97,29 +86,46 @@ class API_meta:
             # OBTENER CUENTAS
             ######################
             print('🔄 Buscando cuentas...')
-            print('\n')
-            self.getAdAccounts(True)
-            id_cta = self.getIdAccount(12)
-            ######################
-            # OBTENER ANUNCIOS
-            ######################
-            print(f'🔄 Buscando campañas para la cuenta {self.getNombreCuenta(id_cta)}...')
-            print('\n')
-            self.getAdCampaigns(id_cta,False)
-            # print(self.campaigns[:2])
-            objectives = list(set(campaign["objective"] for campaign in self.campaigns))
-            print(objectives)
-            latest_campaign = max(self.campaigns, key=lambda c: datetime.strptime(c["start_time"][:-5], "%Y-%m-%dT%H:%M:%S"))
-            print(latest_campaign)
-            # id_campaign = self.campaigns[0]['id']
-            # Obtener anuncios de una campaña
-            # self.getAds(id_campaign,True)
-            self.getAds(latest_campaign['id'],True)
-            ##########################
-            # OBTENER ESTADISTICAS
-            ##########################
-            ad_i = self.ads[8]
-            print(self.getAdEstats(ad_i))
+            # print('\n')
+            self.getAdAccounts()
+            #@@@@@@@@@@@@@@@@@@@@
+            #@@@@@@@@@@@@@@  AGREGAR CODIGO PARA CONSUMIR CONFIG_ESTATS_PUBLICIDAD
+            #@@@@@@@@@@@@@@@@@@@@
+            self.keys_config_stats = self.getConfigEstatsPublicidad()
+            for id_cuenta, campaigns in self.keys_config_stats.items():
+                # nombre_cuenta = self.getNombreCuenta(id_cuenta)
+                # print(nombre_cuenta)
+                print(f"📌 Procesando cuenta: {id_cuenta} - {self.getNombreCuenta(str(id_cuenta))}")
+                self.getAdCampaigns(id_cuenta,False)
+                for id_camp, ads in campaigns.items():
+                    print(f"  🔹 Campaña: {id_camp} - {self.getNombreCampaign(str(id_cuenta),str(id_camp))}")
+                    for id_ad in ads:
+                        print(f"    ▶️ Anuncio: {id_ad}")
+            
+            self.campaigns
+            # id_cta = self.getIdAccount(8)
+            # ######################
+            # # OBTENER ANUNCIOS
+            # ######################
+            # print(f'🔄 Buscando campañas para la cuenta {self.getNombreCuenta(id_cta)}...')
+            # print('\n')
+            # self.getAdCampaigns(id_cta,False)
+            # # print(self.campaigns[:2])
+            # objectives = list(set(campaign["objective"] for campaign in self.campaigns))
+            # print(objectives)
+            # latest_campaign = max(self.campaigns, key=lambda c: datetime.strptime(c["start_time"][:-5], "%Y-%m-%dT%H:%M:%S"))
+            # print(latest_campaign)
+            # # id_campaign = self.campaigns[0]['id']
+            # # Obtener anuncios de una campaña
+            # # self.getAds(id_campaign,True)
+            # self.getAds(latest_campaign['id'],True)
+            # ##########################
+            # # OBTENER ESTADISTICAS
+            # ##########################
+            # ad_i = self.ads[0]
+            # print(ad_i)
+            # print(self.getAdEstats(ad_i))
+            # return self.getAdEstats(ad_i)
         except Exception as e:
             print(e)
 
@@ -197,9 +203,9 @@ class API_meta:
             return None
 
     # ACCESO RECURSOS API
-    def iniFbAPI(self) -> None:
+    def iniMetaAPI(self) -> None:
         """
-        Esta función inicializa la API de Facebook con el token de acceso
+        Esta función inicializa la API de Meta con el token de acceso
         """
         print('\n')
         print(f"🚀 INICIO API META")
@@ -223,6 +229,7 @@ class API_meta:
                 fields=["account_id", "id", "name"])
             )
             print('➜ Cuentas de publicidad obtenidas con éxito')
+            print('\n')
             if mostrar_cuentas: self.printAccounts()
             return self.adAccounts
         except Exception as Error_get_accounts:
@@ -235,12 +242,13 @@ class API_meta:
         try:
             # Obtener campañas de una cuenta de publicidad
             ad_account = AdAccount(f"act_{account_id}")
-            self.campaigns = list(ad_account.get_campaigns(
+            self.campaigns[str(account_id)] = list(ad_account.get_campaigns(
                 fields=["id", "name", "status", "effective_status", "objective", "start_time", "stop_time"])
             )
+            # print(self.campaigns[str(account_id)])
             print('✅ Campañas obtenidas con éxito')
-            if mostrar_campaigns: self.printCampaigns()
-            return self.campaigns
+            if mostrar_campaigns: self.printCampaigns(str(account_id))
+            return self.campaigns[str(account_id)]
         except Exception as e:
             print(e)
 
@@ -283,7 +291,15 @@ class API_meta:
         params["time_range"] = {"since": str(self.hoy), "until": str(self.hoy)} # Traer datos ayer
         try:
             respuesta = ad.get_insights(fields=fields, params=params)
-            data = self.estatToDataframe(respuesta)
+            id_ad = ad['id']
+            nombre_ad = ad['name']
+            datos_ad = {
+                'id':id_ad,
+                'name':nombre_ad
+            }
+            print(f'Este es el ID del AD: {id_ad}')
+            print(f'Este es el NOMBRE del AD: {nombre_ad}')
+            data = self.estatToDataframe(respuesta,datos_ad)
             return data
         except Exception as e:      
             print(e)
@@ -306,12 +322,13 @@ class API_meta:
             print("ℹ️ Utiliza el [id] de una de las cuentas de arriba dentro de la función getIdAccount() para obtener el ID de la cuenta de publicidad")
         print("🔹"+"-" * 40)
 
-    def printCampaigns(self,show_i:bool=False) -> None:
+    def printCampaigns(self,acct_id:str,show_i:bool=False) -> None:
         """
         Esta función imprime las campañas de una cuenta de publicidad
         """
+        print('ESTOOOOY EN PRINT CAMPAIGNS')
         contador = 0
-        for campaign in self.campaigns:
+        for campaign in self.campaigns[acct_id]:
             print(f"[{contador}] 🎯 ID Campaña: {campaign['id']}, Nombre: {campaign['name']}, Estado: {campaign['status']}, Estado Efectivo: {campaign['effective_status']}, Objetivo: {campaign['objective']}")
             contador += 1
         if show_i:
@@ -381,7 +398,7 @@ class API_meta:
         except Exception as e:
             print(e)
 
-    def estatToDataframe(self,estats:list) -> pd.DataFrame:
+    def estatToDataframe(self,estats:list,datos_ad:list) -> pd.DataFrame:
         """
         Esta función convierte las estadísticas de un anuncio en un DataFrame
         """
@@ -395,6 +412,8 @@ class API_meta:
             df = pd.DataFrame(datos_ini)
             for row in data:
                 df.loc[len(df)] = row
+            df['id_ad'] = datos_ad['id']
+            df['nombre_ad'] = datos_ad['name']
             return df
         except Exception as e:
             print(e)
@@ -425,7 +444,7 @@ class API_meta:
         else:
             return f"{tpo_rest // 86400} días"
     
-    def actEnvVariable(txt_key, txt_nuevo, archivo=".env"):
+    def actEnvVariable(self,txt_key, txt_nuevo, archivo=".env"):
         """Actualiza o agrega una variable en el archivo .env."""
         with open(archivo, "r") as f:
             lineas = f.readlines()
@@ -441,6 +460,32 @@ class API_meta:
             if not encontrado:
                 f.write(f"{txt_key}={txt_nuevo}\n")  # Agregar si no existe
 
+    def getConfigEstatsPublicidad(self) -> dict:
+        # Leer el Excel en un DataFrame
+        df = pd.read_excel(self.ruta_config_estats_publicidad, sheet_name=self.hoja_config_estats_publicidad)
+        # Inicializamos el objeto que contendrá la estructura
+        data_structure = {}
+        # Recorremos cada fila del DataFrame
+        for _, row in df.iterrows():
+            # Extraemos la información de cada columna
+            id_cuenta  = row['ID_Cuenta']
+            id_camp = row['ID_Campaña']
+            id_ad       = row['ID_Anuncio']
+            
+            # Si la cuenta aún no está en el diccionario, se crea la entrada
+            if id_cuenta not in data_structure:
+                data_structure[id_cuenta] = {}
+
+            # Si la campaña aún no está en la cuenta, se crea la entrada
+            if id_camp not in data_structure[id_cuenta]:
+                data_structure[id_cuenta][id_camp] = []
+
+            # Se añade el anuncio a la lista de anuncios dentro de la campaña
+            if id_ad not in data_structure[id_cuenta][id_camp]:
+                data_structure[id_cuenta][id_camp].append(id_ad)
+        
+        return data_structure
+
 # Test
 
 # load_dotenv()
@@ -450,8 +495,12 @@ class API_meta:
 # print(APP_ID)
 # print(APP_SECRET)
 
-meta = API_meta()
-meta.runAPI()
+cep = {
+    'ruta':'C:\\Python_APIs\\Meta\\Config_Estats_Publicidad.xlsx',
+    'hoja':'Estats_Publicidad_Meta'
+}
+meta = API_meta(cep)
+data = meta.runAPI()
 # meta.getAdAccounts(True)
 # id_cta_pub = meta.getIdAccount(1)
 # campaña = meta.getAdCampaigns(id_cta_pub,True)
@@ -461,10 +510,9 @@ meta.runAPI()
 #     'level': 'ad',
 #     "breakdowns": ["age",'gender']
 # }
-# df = meta.getAdEstats(ads[0],metricas,parametros)
 # print(df)
 
-# df.to_csv('data_test.csv',index=False)
+# data.to_csv('data_test.csv',index=False)
 
 
 # FacebookAdsApi.init(access_token=dict_env['ACCESS_TOKEN_META']) 
