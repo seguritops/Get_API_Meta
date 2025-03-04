@@ -24,6 +24,7 @@ class API_meta:
         self.ruta_config_estats_publicidad = config_estats_publicidad['ruta']
         self.hoja_config_estats_publicidad = config_estats_publicidad['hoja']
         self.campaigns = {}
+        self.ads = {}
         self.iniMetaAPI()
 
     # geters  
@@ -49,6 +50,19 @@ class API_meta:
                 campaign = dict(campaign)
                 if campaign['id'] == campaign_id:
                     return campaign['name']
+        except Exception as e:
+            print(e)
+
+    def getNombreAd(self,campaign_id:str,ad_id:str) -> str:
+        """
+        Esta función obtiene el nombre de una cuenta de publicidad
+        """
+        try:
+            # Obtener nombre de la cuenta de publicidad
+            for ad in self.ads[campaign_id]:
+                ad = dict(ad)
+                if ad['id'] == ad_id:
+                    return ad['name']
         except Exception as e:
             print(e)
 
@@ -98,11 +112,14 @@ class API_meta:
                 print(f"📌 Procesando cuenta: {id_cuenta} - {self.getNombreCuenta(str(id_cuenta))}")
                 self.getAdCampaigns(id_cuenta,False)
                 for id_camp, ads in campaigns.items():
+                    # print(ads)
                     print(f"  🔹 Campaña: {id_camp} - {self.getNombreCampaign(str(id_cuenta),str(id_camp))}")
+                    self.getAds(id_camp,False)
+                    # print(self.ads[str(id_camp)])
                     for id_ad in ads:
-                        print(f"    ▶️ Anuncio: {id_ad}")
+                        print(f"    ▶️ Anuncio: {id_ad} - {self.getNombreAd(str(id_camp),str(id_ad))}")
             
-            self.campaigns
+            # self.campaigns
             # id_cta = self.getIdAccount(8)
             # ######################
             # # OBTENER ANUNCIOS
@@ -259,13 +276,13 @@ class API_meta:
         try:
             # Obtener anuncios de una campaña
             campaign = Campaign(fbid=campaign_id)
-            self.ads = list(campaign.get_ads(
+            self.ads[str(campaign_id)] = list(campaign.get_ads(
                 fields=["id", "name", "status", "effective_status"])
             )
-            print(f'🔄 Buscando anuncios para la campaña {self.getNombreCampaign(campaign_id)}...')
-            print('\n')
-            if mostrar: self.printAds()
-            return self.ads
+            # print(f'🔄 Buscando anuncios para la campaña {self.getNombreCampaign(campaign_id)}...')
+            # print('\n')
+            if mostrar: self.printAds(str(campaign_id))
+            return self.ads[str(campaign_id)]
         except Exception as e:
             print(e)
 
@@ -336,13 +353,13 @@ class API_meta:
             print("ℹ️ Utiliza el [id] de una de las campañas de arriba dentro de la función getAds() para obtener los datos de la campaña")
         print("-" * 40)
 
-    def printAds(self) -> None:
+    def printAds(self,camp_id:str) -> None:
         """
         Esta función imprime las campañas de una cuenta de publicidad
         """
         print(f'✅ Anuncios obtenidos con éxito...')
         contador = 0
-        for ad in self.ads:
+        for ad in self.ads[str(camp_id)]:
             print(f"[{contador}] ✏️  ID Anuncio: {ad['id']}, Nombre: {ad['name']}, Estado: {ad['status']}, Estado Efectivo: {ad['effective_status']}")
             contador += 1
         print("🔹"+"-" * 40)
