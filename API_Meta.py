@@ -3,6 +3,7 @@ from facebook_business.adobjects.campaign import Campaign
 from facebook_business.adobjects.user import User
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.ad import Ad
+from facebook_business.exceptions import FacebookRequestError
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from datetime import date
@@ -25,6 +26,11 @@ class API_meta:
         self.hoja_config_estats_publicidad = config_estats_publicidad['hoja']
         self.campaigns = {}
         self.ads = {}
+        self.segmentaciones_estats = [
+            ["publisher_platform",'platform_position'],
+            ["gender",'age'],
+            ["country"]
+        ]
         self.iniMetaAPI()
 
     # geters  
@@ -116,8 +122,25 @@ class API_meta:
                     print(f"  🔹 Campaña: {id_camp} - {self.getNombreCampaign(str(id_cuenta),str(id_camp))}")
                     self.getAds(id_camp,False)
                     # print(self.ads[str(id_camp)])
+                    cont = 0
                     for id_ad in ads:
                         print(f"    ▶️ Anuncio: {id_ad} - {self.getNombreAd(str(id_camp),str(id_ad))}")
+                        for segmentacion in self.segmentaciones_estats:
+                            # print(segmentacion)
+                            params = {
+                                "level": "ad",
+                                "breakdowns": segmentacion
+                            }
+                            if cont == 0:
+                                df = self.getAdEstats(
+                                    str(id_cuenta),
+                                    str(id_camp),
+                                    self.findAdInAds(str(id_camp),str(id_ad)),
+                                    params=params
+                                )
+                                # print(df)
+                                df.to_excel('data_test_v2.xlsx',index=False)
+                            cont += 1
             
             # self.campaigns
             # id_cta = self.getIdAccount(8)
@@ -287,6 +310,8 @@ class API_meta:
             print(e)
 
     def getAdEstats(self,
+                    id_account:str,
+                    id_campaign:str,
                     ad:Ad,
                     fields:list=[
                         "reach",                          
@@ -298,31 +323,32 @@ class API_meta:
                     ],
                     params:dict={
                         "level": "ad",
-                        # "breakdowns": ["gender",'age']
+                        "breakdowns": ["gender",'age']
                         # "breakdowns": ["country"]
-                        "breakdowns": ["publisher_platform",'platform_position']
+                        # "breakdowns": ["publisher_platform",'platform_position']
         }) -> pd.DataFrame:
         """
         Esta función obtiene las estadísticas de un anuncio
         """
-        params["time_range"] = {"since": str(self.hoy), "until": str(self.hoy)} # Traer datos ayer
+        params["time_range"] = {"since": str(self.hoy), "until": str(self.hoy)}
         try:
             respuesta = ad.get_insights(fields=fields, params=params)
             id_ad = ad['id']
             nombre_ad = ad['name']
             datos_ad = {
+                'id_acct':id_account,
+                'id_camp':id_campaign,
                 'id':id_ad,
                 'name':nombre_ad
             }
-            print(f'Este es el ID del AD: {id_ad}')
-            print(f'Este es el NOMBRE del AD: {nombre_ad}')
+            # print(f'Este es el ID del AD: {id_ad}')
+            # print(f'Este es el NOMBRE del AD: {nombre_ad}')
             data = self.estatToDataframe(respuesta,datos_ad)
             return data
-        except Exception as e:      
-            print(e)
-
-    def getGroupedAdEstats(self):
-        pass
+        except Exception as e:
+            print('\n')
+            print("Código de error:", e.http_status())
+            print("Mensaje de error:", e.api_error_message())
 
     # metodos auxiliares
     def printAccounts(self,show_i:bool=False) -> None:
@@ -429,6 +455,8 @@ class API_meta:
             df = pd.DataFrame(datos_ini)
             for row in data:
                 df.loc[len(df)] = row
+            df['id_account'] = datos_ad['id_acct']
+            df['id_campaign'] = datos_ad['id_camp']
             df['id_ad'] = datos_ad['id']
             df['nombre_ad'] = datos_ad['name']
             return df
@@ -503,6 +531,30 @@ class API_meta:
         
         return data_structure
 
+    def findAdInAds(self, id_camp:str, id_ad:str) -> Ad:
+        """
+        Busca un anuncio en un diccionario estructurado por campañas.
+
+        :param id_camp: ID de la campaña a buscar (str)
+        :param id_ad: ID del anuncio a buscar dentro de la campaña (str)
+        :return: (Ad) Diccionario con los datos del anuncio o None si no se encuentra
+        """
+        # Buscar si la campaña existe
+        if id_camp in self.ads:
+            ads_list = self.ads[str(id_camp)]  # Obtener la lista de anuncios en esa campaña
+
+            # Buscar el anuncio dentro de la lista de la campaña
+            for ad in ads_list:
+                if ad.get("id") == id_ad:
+                    return ad
+                    # {
+                    #     "id": ad["id"],
+                    #     "name": ad["name"],
+                    #     "effective_status": ad["effective_status"],
+                    #     "status": ad["status"]
+                    # }
+
+        return None
 # Test
 
 # load_dotenv()
@@ -513,7 +565,7 @@ class API_meta:
 # print(APP_SECRET)
 
 cep = {
-    'ruta':'C:\\Python_APIs\\Meta\\Config_Estats_Publicidad.xlsx',
+    'ruta':'C:\\Python_APIs\\Meta\\Config_Estats_Publicidad - copia.xlsx',
     'hoja':'Estats_Publicidad_Meta'
 }
 meta = API_meta(cep)
