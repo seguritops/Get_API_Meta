@@ -26,6 +26,7 @@ class API_meta:
         self.hoja_config_estats_publicidad = config_estats_publicidad['hoja']
         self.campaigns = {}
         self.ads = {}
+        self.data = {}
         self.segmentaciones_estats = [
             ["publisher_platform",'platform_position'],
             ["gender",'age'],
@@ -33,6 +34,7 @@ class API_meta:
         ]
         self.iniMetaAPI()
 
+    ########################
     # geters  
     def getIdAccount(self,indice:int) -> str:
         """
@@ -84,10 +86,86 @@ class API_meta:
         except Exception as e:
             print(e)
 
-    # seters
-
+    ########################
     # metodos
+    def validacionToken(self) -> None:
+        """
+        Esta función valida el token actual guardado.
+        Si el token actual ya no es válido, se solicita uno nuevo.
+        Al obetener el nuevo token, se guarda en las variables de entorno para
+        ser consumido posteriormente y ser un dato persistente.
+        """
+        if not self.validarToken(): # Validar token
+            print('🔄 Solicitando nuevo Token')
+            self.token = self.getNuevoToken() # Obtener nuevo token
+            self.actEnvVariable(self.key_token,self.token) # Actualizar token en variable de entorno
+            self.depurar_token(self.token) # Depurar token
 
+    def saveCuentaLevelInDict(self) -> None:
+        """
+        Esta función itera sobre las cuentas alojadas en Config_Estats_Publicidad y
+        las aloja en un diccionario de la clase par tener la data centralizada
+        """
+        for id_cuenta, campaigns in self.keys_config_stats.items():
+            print(f"📌 Procesando cuenta: {id_cuenta} - {self.getNombreCuenta(str(id_cuenta))}")
+            self.getAdCampaigns(id_cuenta)
+            if str(id_cuenta) not in self.data.items(): self.data[str(id_cuenta)] = {}
+            self.saveCampaignLevelInDict(str(id_cuenta),campaigns)
+
+    def saveCampaignLevelInDict(self,acct_id:str,campaigns:dict) -> None:
+        """
+        Esta función itera sobre las campañas y
+        las aloja en un diccionario de la clase par tener la data centralizada
+
+        :param acct_id (str): ID de la cuenta
+        :param camp_id (str): ID de la campaña
+        """
+        for id_camp, ads in campaigns.items():
+            print(f"  🔹 Campaña: {id_camp} - {self.getNombreCampaign(str(acct_id),str(id_camp))}")
+            self.getAds(id_camp)
+            if str(id_camp) not in self.data[str(acct_id)].items(): self.data[str(acct_id)][str(id_camp)] = {}
+            self.saveAdLevelInDict(str(acct_id),str(id_camp),ads)
+
+    def saveAdLevelInDict(self,acct_id:str,camp_id:str,ads:list[str]) -> None:
+        """
+        Esta función itera sobre los anuncios y
+        los aloja en un diccionario de la clase par tener la data centralizada
+
+        :param acct_id (str): ID de la cuenta
+        :param camp_id (str): ID de la campaña
+        :param ad_id (str): ID del anuncio
+        """
+        for id_ad in ads:
+            print(f"    ▶️ Anuncio: {id_ad} - {self.getNombreAd(str(camp_id),str(id_ad))}")
+            if str(id_ad) not in self.data[str(acct_id)][str(camp_id)].items(): self.data[str(acct_id)][str(camp_id)][str(id_ad)] = {}
+            self.saveAdDataInDict(str(acct_id),str(camp_id),str(id_ad))
+                
+    def saveAdDataInDict(self,acct_id:str,camp_id:str,ad_id:str) -> None:
+        """
+        Esta función itera en 3 opciones (configurables) de breakdowns,
+        obtiene la data mediante una consulta (Ad.get_insights()) y
+        lo aloja en un diccionario de la clase par tener la data centralizada
+
+        :param acct_id (str): ID de la cuenta
+        :param camp_id (str): ID de la campaña
+        :param ad_id (str): ID del anuncio
+        """
+        index = 0
+        for segmentacion in self.segmentaciones_estats:
+            params = {
+                "level": "ad",
+                "breakdowns": segmentacion
+            }
+            df = self.getAdEstats(
+                str(acct_id),
+                str(camp_id),
+                self.findAdInAds(str(camp_id),str(ad_id)),
+                params=params
+            )
+            self.data[str(acct_id)][str(camp_id)][str(ad_id)][str(index)] = df
+            index += 1
+
+    ########################
     # CONTROLADORES
     def runAPI(self) -> None:
         """
@@ -97,51 +175,19 @@ class API_meta:
             ######################
             # VALIODACION TOKEN
             ######################
-            if not self.validarToken(): # Validar token
-                print('pedi nuevo token')
-                self.token = self.getNuevoToken() # Obtener nuevo token
-                self.actEnvVariable(self.key_token,self.token) # Actualizar token en variable de entorno
-                self.depurar_token(self.token) # Depurar token
+            self.validacionToken()
             ######################
-            # OBTENER CUENTAS
+            # OBTENER DATA
             ######################
             print('🔄 Buscando cuentas...')
-            # print('\n')
             self.getAdAccounts()
             self.keys_config_stats = self.getConfigEstatsPublicidad()
-            self.data = {}
-            for id_cuenta, campaigns in self.keys_config_stats.items():
-                print(f"📌 Procesando cuenta: {id_cuenta} - {self.getNombreCuenta(str(id_cuenta))}")
-                self.getAdCampaigns(id_cuenta,False)
-                if str(id_cuenta) not in self.data.items(): self.data[str(id_cuenta)] = {}
-                for id_camp, ads in campaigns.items():
-                    print(f"  🔹 Campaña: {id_camp} - {self.getNombreCampaign(str(id_cuenta),str(id_camp))}")
-                    self.getAds(id_camp,False)
-                    if str(id_camp) not in self.data[str(id_cuenta)].items(): self.data[str(id_cuenta)][str(id_camp)] = {}
-                    for id_ad in ads:
-                        print(f"    ▶️ Anuncio: {id_ad} - {self.getNombreAd(str(id_camp),str(id_ad))}")
-                        if str(id_ad) not in self.data[str(id_cuenta)][str(id_camp)].items(): self.data[str(id_cuenta)][str(id_camp)][str(id_ad)] = {}
-                        index = 0
-                        for segmentacion in self.segmentaciones_estats:
-                            params = {
-                                "level": "ad",
-                                "breakdowns": segmentacion
-                            }
-                            df = self.getAdEstats(
-                                str(id_cuenta),
-                                str(id_camp),
-                                self.findAdInAds(str(id_camp),str(id_ad)),
-                                params=params
-                            )
-                            # df.to_excel('data_test_v2.xlsx',index=False)
-                            self.data[str(id_cuenta)][str(id_camp)][str(id_ad)][str(index)] = df
-                            index += 1
-
+            self.saveCuentaLevelInDict()
             return self.data
         except Exception as e:
             print(e)
-
     
+    ########################
     # TOKEN
     def getToken(self,show=False) -> str:
         """
@@ -214,6 +260,7 @@ class API_meta:
             print("❌ Error al depurar el token:", data)
             return None
 
+    ########################
     # ACCESO RECURSOS API
     def iniMetaAPI(self) -> None:
         """
@@ -322,6 +369,7 @@ class API_meta:
             print("Código de error:", e.http_status())
             print("Mensaje de error:", e.api_error_message())
 
+    ########################
     # metodos auxiliares
     def printAccounts(self,show_i:bool=False) -> None:
         """
@@ -413,13 +461,13 @@ class API_meta:
         except Exception as e:
             print(e)
 
-    def estatToDataframe(self,estats:list,datos_ad:list) -> pd.DataFrame:
+    def estatToDataframe(self,estats:list,datos_ad:list) -> pd.DataFrame | None:
         """
         Esta función convierte las estadísticas de un anuncio en un DataFrame
         """
         try:
-            # Validar que el diccionario no esté vacío
-            if len(estats) == 0: raise Error_dict_vacio
+            # Validar que la data no esté vacía
+            if len(estats) == 0: raise Warn_sin_data
             data = self.mapEstat(estats)
             # Convertir estadísticas a DataFrame
             met_keys = list(data[0].keys())
@@ -527,6 +575,7 @@ class API_meta:
                     # }
 
         return None
+
 # Test
 
 # load_dotenv()
@@ -541,9 +590,10 @@ cep = {
     'hoja':'Estats_Publicidad_Meta'
 }
 meta = API_meta(cep)
+# meta = API_meta(cep,fecha_captura="2025-03-03")
 data = meta.runAPI()
 
-print(data.items())
+# print(data.items())
 
 
 # meta.getAdAccounts(True)
