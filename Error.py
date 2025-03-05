@@ -14,3 +14,5 @@ Error_get_accounts = APIError('Error al obtener las cuentas de publicidad. Por f
 Error_get_id_account = APIError('Error al obtener el ID de la cuenta de publicidad. Por favor revisa que el índice ingresado sea válido','Error Index')
 Error_dict_vacio = APIError('Error al mapear las estadísticas de un anuncio. Por favor revisa que el diccionario no esté vacío','Error')
 Error_API_request = APIError('Error al realizar la petición a la API de Meta. Por favor revisa que los parametros y metricas sean validos','Error consulta')
+# Warnings
+Warn_sin_data = APIError('La data resultante de la conulta no contiene información.','Warning')
