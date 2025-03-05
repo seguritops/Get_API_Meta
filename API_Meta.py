@@ -12,9 +12,11 @@ import requests
 import time
 import os
 # Error Handler
-from Error import *
+# from Error import *
+from Get_API_Meta.Error import *
 # URLs
-from URLs import DEBUG_TOKEN_URL,EXCHANGE_TOKEN_URL
+# from URLs import DEBUG_TOKEN_URL,EXCHANGE_TOKEN_URL
+from Get_API_Meta.URLs import DEBUG_TOKEN_URL,EXCHANGE_TOKEN_URL
 
 ####################################################
 ## API META
@@ -24,9 +26,35 @@ class API_meta:
         self.hoy = fecha_captura
         self.ruta_config_estats_publicidad = config_estats_publicidad['ruta']
         self.hoja_config_estats_publicidad = config_estats_publicidad['hoja']
+        self.cols_base = ['id_account','id_campaign','id_ad','date_start','date_stop']
+        self.ad_fields = [
+            "reach",                          
+            "impressions",                 
+            "inline_link_clicks",      
+            "cpc",                        
+            "actions",
+            "spend"
+        ]
+        self.action_mets_valid = [
+            "link_click",
+            "post_engagement",
+            "page_engagement",
+            "like",
+            "comment",
+            "share",
+            "photo_view",
+            "video_view",
+            "lead",
+            "onsite_conversion.post_save",
+            "offsite_conversion",
+            "purchase",
+            "add_to_cart",
+            "checkout_initiated"
+        ]
         self.campaigns = {}
         self.ads = {}
         self.data = {}
+        self.data_consolidada = {}
         self.segmentaciones_estats = [
             ["publisher_platform",'platform_position'],
             ["gender",'age'],
@@ -45,6 +73,18 @@ class API_meta:
             if indice < 0 or indice >= len(self.adAccounts):
                 raise Error_get_id_account
             return self.adAccounts[indice]['account_id']
+        except Exception as e:
+            print(e)
+
+    def getNombreCuenta(self,account_id:str) -> str:
+        """
+        Esta función obtiene el nombre de una cuenta de publicidad
+        """
+        try:
+            # Obtener nombre de la cuenta de publicidad
+            for account in self.adAccounts:
+                if account['account_id'] == account_id:
+                    return account['name']
         except Exception as e:
             print(e)
 
@@ -71,18 +111,6 @@ class API_meta:
                 ad = dict(ad)
                 if ad['id'] == ad_id:
                     return ad['name']
-        except Exception as e:
-            print(e)
-
-    def getNombreCuenta(self,account_id:str) -> str:
-        """
-        Esta función obtiene el nombre de una cuenta de publicidad
-        """
-        try:
-            # Obtener nombre de la cuenta de publicidad
-            for account in self.adAccounts:
-                if account['account_id'] == account_id:
-                    return account['name']
         except Exception as e:
             print(e)
 
@@ -165,6 +193,32 @@ class API_meta:
             self.data[str(acct_id)][str(camp_id)][str(ad_id)][str(index)] = df
             index += 1
 
+    def saveGroupedData(self) -> dict:
+        # Diccionario para almacenar los DataFrames consolidados por cada clave (0, 1, 2)
+        tablas_agrupadas = {'0': [], '1': [], '2': []}
+
+        # Recorrer el diccionario anidado
+        for id_cuenta, campaigns in self.data.items():
+            for id_campaña, anuncios in campaigns.items():
+                for id_anuncio, subdict in anuncios.items():
+                    for key, df in subdict.items():
+                        if key in tablas_agrupadas and isinstance(df, pd.DataFrame):
+                            tablas_agrupadas[key].append(df)
+        return tablas_agrupadas
+
+    def consolidarData(self,data_agrupada:dict) -> None:
+        cols_base = self.cols_base + self.ad_fields + self.action_mets_valid
+        cols_base.remove('actions')
+        # Consolidar los DataFrames asegurando que tengan las mismas columnas
+        for key, dfs in data_agrupada.items():
+            cols = cols_base + self.segmentaciones_estats[int(key)]
+            # print(cols)
+            if dfs:
+                # Asegurar que todos los DataFrames tengan todas las columnas, llenando con NaN cuando sea necesario
+                dfs_completos = [df.reindex(columns=cols) for df in dfs]
+                # Concatenar los DataFrames ajustados
+                self.data_consolidada[key] = pd.concat(dfs_completos, ignore_index=True).fillna(0)
+
     ########################
     # CONTROLADORES
     def runAPI(self) -> None:
@@ -183,7 +237,9 @@ class API_meta:
             self.getAdAccounts()
             self.keys_config_stats = self.getConfigEstatsPublicidad()
             self.saveCuentaLevelInDict()
-            return self.data
+            self.consolidarData(self.saveGroupedData())
+            self.getUniqueIds()
+            return self.data_consolidada
         except Exception as e:
             print(e)
     
@@ -423,24 +479,21 @@ class API_meta:
         Solo recibe un elemento del resultado completo
         """
         estats = dict(estat)
-        # print(dict(estats))
         try:
             estat_keys = list(estats.keys())
-            # print(met_keys)
             if len(estat_keys) == 0: raise Error_dict_vacio
-            # return pd.DataFrame(dict(estat))
             met_dict = {}
             not_str = {}
             for met in estats:
                 if type(estats[met]) == str:
                     met_dict[met] = estats[met]
-                else:
+                else: # actions
                     not_str[met] = estats[met]
                     data = not_str[met]
                     for metric in data:
                         key = metric[list(metric.keys())[0]]
                         value = metric[list(metric.keys())[1]]
-                        met_dict[key] = value
+                        if key in self.action_mets_valid: met_dict[key] = value
             return met_dict
         except Exception as e:
             print(e)
@@ -488,7 +541,12 @@ class API_meta:
         Esta función obtiene los datos de la aplicación
         """
         try:
-            load_dotenv()
+            # Obtener la ruta del directorio donde está API_Meta.py
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            # Construir la ruta completa del archivo .env
+            ENV_PATH = os.path.join(BASE_DIR, ".env")
+            # Cargar el archivo .env desde la ruta detectada
+            load_dotenv(ENV_PATH)
             ACCESS_TOKEN_META = os.getenv('ACCESS_TOKEN_META')
             APP_ID = os.getenv('APP_ID')
             APP_SECRET = os.getenv('APP_SECRET')
@@ -576,45 +634,21 @@ class API_meta:
 
         return None
 
+    def getUniqueIds(self) -> pd.DataFrame | None:
+        df = self.data_consolidada['0'][['id_account','id_campaign','id_ad']].drop_duplicates().reset_index(drop=True)
+        df['name_account'] = df['id_account'].apply(lambda x: self.getNombreCuenta(str(x)))
+        df['name_campaign'] = df.apply(lambda x: self.getNombreCampaign(str(x['id_account']),str(x['id_campaign'])),axis=1)
+        df['name_ad'] = df.apply(lambda x: self.getNombreAd(str(x['id_campaign']),str(x['id_ad'])),axis=1)
+        self.data_consolidada['ids'] = df
+
 # Test
 
-# load_dotenv()
-# APP_ID = os.getenv('APP_ID')
-# APP_SECRET = os.getenv('APP_SECRET')
-
-# print(APP_ID)
-# print(APP_SECRET)
-
-cep = {
-    'ruta':'C:\\Python_APIs\\Meta\\Config_Estats_Publicidad - copia.xlsx',
-    'hoja':'Estats_Publicidad_Meta'
-}
-meta = API_meta(cep)
-# meta = API_meta(cep,fecha_captura="2025-03-03")
-data = meta.runAPI()
+# cep = {
+#     'ruta':'C:\\Python_APIs\\Meta\\Config_Estats_Publicidad - copia.xlsx',
+#     'hoja':'Estats_Publicidad_Meta'
+# }
+# meta = API_meta(cep)
+# # meta = API_meta(cep,fecha_captura="2025-03-03")
+# data = meta.runAPI()
 
 # print(data.items())
-
-
-# meta.getAdAccounts(True)
-# id_cta_pub = meta.getIdAccount(1)
-# campaña = meta.getAdCampaigns(id_cta_pub,True)
-# ads = meta.getAds(campaña[0]['id'],True)
-# metricas = ['reach','spend','impressions','cpc']
-# parametros = {
-#     'level': 'ad',
-#     "breakdowns": ["age",'gender']
-# }
-# print(df)
-
-# data.to_csv('data_test.csv',index=False)
-
-
-# FacebookAdsApi.init(access_token=dict_env['ACCESS_TOKEN_META']) 
-
-# me = User(fbid="me")
-# user_fields = ["account_id", "id", "name"]
-# my_accounts = list(me.get_ad_accounts(fields=user_fields))
-
-# for account in my_accounts:
-#     print(f"Account ID: {account['account_id']}, Name: {account['name']}")
