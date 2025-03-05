@@ -108,64 +108,36 @@ class API_meta:
             print('🔄 Buscando cuentas...')
             # print('\n')
             self.getAdAccounts()
-            #@@@@@@@@@@@@@@@@@@@@
-            #@@@@@@@@@@@@@@  AGREGAR CODIGO PARA CONSUMIR CONFIG_ESTATS_PUBLICIDAD
-            #@@@@@@@@@@@@@@@@@@@@
             self.keys_config_stats = self.getConfigEstatsPublicidad()
+            self.data = {}
             for id_cuenta, campaigns in self.keys_config_stats.items():
-                # nombre_cuenta = self.getNombreCuenta(id_cuenta)
-                # print(nombre_cuenta)
                 print(f"📌 Procesando cuenta: {id_cuenta} - {self.getNombreCuenta(str(id_cuenta))}")
                 self.getAdCampaigns(id_cuenta,False)
+                if str(id_cuenta) not in self.data.items(): self.data[str(id_cuenta)] = {}
                 for id_camp, ads in campaigns.items():
-                    # print(ads)
                     print(f"  🔹 Campaña: {id_camp} - {self.getNombreCampaign(str(id_cuenta),str(id_camp))}")
                     self.getAds(id_camp,False)
-                    # print(self.ads[str(id_camp)])
-                    cont = 0
+                    if str(id_camp) not in self.data[str(id_cuenta)].items(): self.data[str(id_cuenta)][str(id_camp)] = {}
                     for id_ad in ads:
                         print(f"    ▶️ Anuncio: {id_ad} - {self.getNombreAd(str(id_camp),str(id_ad))}")
+                        if str(id_ad) not in self.data[str(id_cuenta)][str(id_camp)].items(): self.data[str(id_cuenta)][str(id_camp)][str(id_ad)] = {}
+                        index = 0
                         for segmentacion in self.segmentaciones_estats:
-                            # print(segmentacion)
                             params = {
                                 "level": "ad",
                                 "breakdowns": segmentacion
                             }
-                            if cont == 0:
-                                df = self.getAdEstats(
-                                    str(id_cuenta),
-                                    str(id_camp),
-                                    self.findAdInAds(str(id_camp),str(id_ad)),
-                                    params=params
-                                )
-                                # print(df)
-                                df.to_excel('data_test_v2.xlsx',index=False)
-                            cont += 1
-            
-            # self.campaigns
-            # id_cta = self.getIdAccount(8)
-            # ######################
-            # # OBTENER ANUNCIOS
-            # ######################
-            # print(f'🔄 Buscando campañas para la cuenta {self.getNombreCuenta(id_cta)}...')
-            # print('\n')
-            # self.getAdCampaigns(id_cta,False)
-            # # print(self.campaigns[:2])
-            # objectives = list(set(campaign["objective"] for campaign in self.campaigns))
-            # print(objectives)
-            # latest_campaign = max(self.campaigns, key=lambda c: datetime.strptime(c["start_time"][:-5], "%Y-%m-%dT%H:%M:%S"))
-            # print(latest_campaign)
-            # # id_campaign = self.campaigns[0]['id']
-            # # Obtener anuncios de una campaña
-            # # self.getAds(id_campaign,True)
-            # self.getAds(latest_campaign['id'],True)
-            # ##########################
-            # # OBTENER ESTADISTICAS
-            # ##########################
-            # ad_i = self.ads[0]
-            # print(ad_i)
-            # print(self.getAdEstats(ad_i))
-            # return self.getAdEstats(ad_i)
+                            df = self.getAdEstats(
+                                str(id_cuenta),
+                                str(id_camp),
+                                self.findAdInAds(str(id_camp),str(id_ad)),
+                                params=params
+                            )
+                            # df.to_excel('data_test_v2.xlsx',index=False)
+                            self.data[str(id_cuenta)][str(id_camp)][str(id_ad)][str(index)] = df
+                            index += 1
+
+            return self.data
         except Exception as e:
             print(e)
 
@@ -570,6 +542,10 @@ cep = {
 }
 meta = API_meta(cep)
 data = meta.runAPI()
+
+print(data.items())
+
+
 # meta.getAdAccounts(True)
 # id_cta_pub = meta.getIdAccount(1)
 # campaña = meta.getAdCampaigns(id_cta_pub,True)
