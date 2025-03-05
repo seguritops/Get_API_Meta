@@ -1,10 +1,10 @@
 class APIError(Exception):
     """Clase base para errores personalizados."""
 
-    def __init__(self, message: str, tipo: str):
+    def __init__(self, message: str, tipo: str,indentacion:str=''):
         self.message = message
         # self.code = code  # Código de error opcional
-        super().__init__(f"[{tipo}] {message}")
+        super().__init__(f"{indentacion}[{tipo}] {message}")
 
 # Crear errores personalizados
 Error_dict_format = APIError('Debes ingresar un diccionario con las llaves "ruta" y "nombre_token" en formato texto no nulo','Error Formato')
@@ -15,4 +15,4 @@ Error_get_id_account = APIError('Error al obtener el ID de la cuenta de publicid
 Error_dict_vacio = APIError('Error al mapear las estadísticas de un anuncio. Por favor revisa que el diccionario no esté vacío','Error')
 Error_API_request = APIError('Error al realizar la petición a la API de Meta. Por favor revisa que los parametros y metricas sean validos','Error consulta')
 # Warnings
-Warn_sin_data = APIError('La data resultante de la conulta no contiene información.','Warning')
+Warn_sin_data = APIError('La data resultante de la conulta no contiene información.','⚠️ Warning','     ')
