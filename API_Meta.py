@@ -207,11 +207,10 @@ class API_meta:
         return tablas_agrupadas
 
     def consolidarData(self,data_agrupada:dict) -> None:
-        cols_base = self.cols_base + self.ad_fields + self.action_mets_valid
-        cols_base.remove('actions')
         # Consolidar los DataFrames asegurando que tengan las mismas columnas
         for key, dfs in data_agrupada.items():
-            cols = cols_base + self.segmentaciones_estats[int(key)]
+            cols = self.cols_base + self.segmentaciones_estats[int(key)] + self.ad_fields + self.action_mets_valid
+            cols.remove('actions')
             # print(cols)
             if dfs:
                 # Asegurar que todos los DataFrames tengan todas las columnas, llenando con NaN cuando sea necesario
